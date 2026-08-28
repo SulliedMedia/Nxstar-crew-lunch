@@ -74,6 +74,13 @@ select{
 select:focus{outline:2px solid var(--hi);outline-offset:1px;}
 
 .vendor-tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--chalk-dim);margin-top:8px;letter-spacing:1px;}
+.menu-image-link{
+  display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:none;border:1px solid var(--line);
+  color:var(--hi-2);font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.5px;
+  padding:8px 12px;border-radius:6px;cursor:pointer;transition:.15s;
+}
+.menu-image-link:hover{border-color:var(--hi-2);background:rgba(255,183,0,.08);}
+.menu-image-link.hidden{display:none;}
 
 .cat-heading{
   font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:14px;
@@ -107,6 +114,11 @@ select:focus{outline:2px solid var(--hi);outline-offset:1px;}
   color:var(--chalk);font-size:12.5px;display:none;
 }
 .notes-input.show{display:block;}
+.in-order-row{display:none;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--chalk-dim);border-top:1px dashed var(--line);padding-top:8px;margin-top:2px;font-family:'IBM Plex Mono',monospace;}
+.in-order-row.show{display:flex;}
+.in-order-row strong{color:var(--hi-2);}
+.mini-remove{background:none;border:1px solid var(--line);color:var(--danger);border-radius:5px;padding:5px 9px;font-size:11px;cursor:pointer;font-family:'IBM Plex Mono',monospace;transition:.15s;}
+.mini-remove:hover{border-color:var(--danger);background:rgba(209,80,63,.12);}
 .add-btn{
   font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:1px;text-transform:uppercase;
   background:var(--hi);color:#1a0e04;border:none;border-radius:6px;padding:8px 12px;cursor:pointer;
@@ -224,6 +236,7 @@ table.log th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--
         <option value="rollingbites">Rolling Bites Kitchen — Mexican Fusion Truck</option>
       </select>
       <div class="vendor-tag" id="vendorTag"></div>
+      <button class="menu-image-link hidden" id="viewMenuImageBtn" type="button">🖼 View full menu image</button>
     </div>
 
     <div class="step">
@@ -274,6 +287,14 @@ table.log th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--
   </div>
 </div>
 
+<div class="modal hidden" id="menuImageModal">
+  <div class="modal-box" style="max-width:640px;padding:16px;">
+    <button class="modal-close" data-close>&times;</button>
+    <h2 id="menuImageTitle" style="margin-bottom:14px;"></h2>
+    <img id="menuImageEl" src="" alt="" style="width:100%;height:auto;border-radius:6px;display:block;">
+  </div>
+</div>
+
 <div class="modal hidden" id="logModal">
   <div class="modal-box" style="max-width:900px;">
     <button class="modal-close" data-close>&times;</button>
@@ -297,6 +318,7 @@ const MENUS = {
   kabobaholic: {
     name: "Kabobaholic",
     tag: "Halal Mediterranean Kabob",
+    menuImage: "menus/kabobaholic-menu.webp",
     builder: {
       label: "Rice Plate / Bowl / Wrap / Solo",
       formats: [
@@ -330,6 +352,7 @@ const MENUS = {
   primephilly: {
     name: "Prime Philly",
     tag: "Cheesesteaks · Burgers · Sandwiches",
+    menuImage: "menus/primephilly-menu.webp",
     items: [
       {id:"cheesesteak-sandwich",name:"Philly Cheesesteak Sandwich",cat:"Cheesesteaks"},
       {id:"cheesesteak-fries",name:"Philly Cheesesteak on Fries",cat:"Cheesesteaks"},
@@ -354,6 +377,7 @@ const MENUS = {
   rollingbites: {
     name: "Rolling Bites Kitchen",
     tag: "Mexican Fusion Food Truck · Orange County",
+    menuImage: "menus/rollingbites-menu.webp",
     items: [
       {id:"burrito",name:"Burrito",cat:"Entrees",desc:"Rice, beans, choice of protein, pico, cheese, house sauce."},
       {id:"fish-taco",name:"Fish Taco",cat:"Entrees",desc:"Crispy fish, cabbage slaw, pico, baja sauce, lime."},
@@ -378,6 +402,7 @@ const DEFAULT_CONFIG = {
   token: "nxstar-crew-25"
 };
 const state = { restaurant: null, cart: [], config: { ...DEFAULT_CONFIG } };
+let badgeUpdaters = [];
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 
@@ -395,6 +420,7 @@ function renderMenu(key){
   const area = $("#menuArea");
   $("#vendorTag").textContent = menu.tag;
   area.innerHTML = "";
+  badgeUpdaters = [];
 
   if (menu.builder){
     const b = menu.builder;
@@ -421,14 +447,26 @@ function renderMenu(key){
       </div>
       <button class="notes-toggle" id="bNotesToggle">+ add notes</button>
       <input type="text" class="notes-input" id="bNotes" placeholder="e.g. extra tzatziki, no onion">
+      <div class="in-order-row" id="bInOrderRow">
+        <span><strong id="bInOrderCount">0</strong> in order</span>
+        <button type="button" class="mini-remove" id="bRemove">− Remove one</button>
+      </div>
     `;
     area.appendChild(wrap);
 
+    const currentBuilderId = ()=> `builder-${$("#bFormat").value}-${$("#bProtein").value}`;
+    const updateBuilderBadge = ()=>{
+      const qty = getCartQty(currentBuilderId());
+      $("#bInOrderCount").textContent = qty;
+      $("#bInOrderRow").classList.toggle("show", qty > 0);
+    };
     const updateDesc = ()=>{
       const f = b.formats.find(x=>x.id===$("#bFormat").value);
       const p = b.proteins.find(x=>x.id===$("#bProtein").value);
       $("#bDesc").textContent = `${f.desc} · ${p.desc}`;
+      updateBuilderBadge();
     };
+    badgeUpdaters.push(updateBuilderBadge);
     $("#bFormat").addEventListener("change", updateDesc);
     $("#bProtein").addEventListener("change", updateDesc);
     updateDesc();
@@ -442,9 +480,10 @@ function renderMenu(key){
       const p = b.proteins.find(x=>x.id===$("#bProtein").value);
       const qty = parseInt(wrap.querySelector(".qty").dataset.qty,10);
       const notes = $("#bNotes").value.trim();
-      addToCart({ name:`${f.name} — ${p.name}`, qty, notes, price:null });
+      addToCart({ itemId:currentBuilderId(), name:`${f.name} — ${p.name}`, qty, notes, price:null });
       $("#bNotes").value = "";
     });
+    $("#bRemove").addEventListener("click", ()=> removeOneFromCart(currentBuilderId()));
   }
 
   const cats = [...new Set(menu.items.map(i=>i.cat))];
@@ -470,17 +509,31 @@ function renderMenu(key){
         </div>
         <button class="notes-toggle">+ add notes</button>
         <input type="text" class="notes-input" placeholder="e.g. no cheese, extra sauce">
+        <div class="in-order-row">
+          <span><strong class="in-order-count">0</strong> in order</span>
+          <button type="button" class="mini-remove">− Remove one</button>
+        </div>
       `;
       wireQty(card);
+      const inOrderRow = card.querySelector(".in-order-row");
+      const inOrderCount = card.querySelector(".in-order-count");
+      const updateItemBadge = ()=>{
+        const qty = getCartQty(item.id);
+        inOrderCount.textContent = qty;
+        inOrderRow.classList.toggle("show", qty > 0);
+      };
+      badgeUpdaters.push(updateItemBadge);
+      updateItemBadge();
       card.querySelector(".notes-toggle").addEventListener("click", ()=>{
         card.querySelector(".notes-input").classList.toggle("show");
       });
       card.querySelector(".add-btn").addEventListener("click", ()=>{
         const qty = parseInt(card.querySelector(".qty").dataset.qty,10);
         const notes = card.querySelector(".notes-input").value.trim();
-        addToCart({ name:item.name, qty, notes, price:item.price||null });
+        addToCart({ itemId:item.id, name:item.name, qty, notes, price:item.price||null });
         card.querySelector(".notes-input").value = "";
       });
+      card.querySelector(".mini-remove").addEventListener("click", ()=> removeOneFromCart(item.id));
       grid.appendChild(card);
     });
     area.appendChild(grid);
@@ -503,12 +556,34 @@ function wireQty(scope){
 function addToCart(entry){
   state.cart.push(entry);
   renderTicket();
+  refreshBadges();
   toast(`Added ${entry.qty}× ${entry.name}`);
+}
+
+function getCartQty(itemId){
+  return state.cart.filter(i=>i.itemId===itemId).reduce((s,i)=> s + i.qty, 0);
+}
+
+function removeOneFromCart(itemId){
+  for (let i = state.cart.length - 1; i >= 0; i--){
+    if (state.cart[i].itemId === itemId){
+      state.cart[i].qty -= 1;
+      if (state.cart[i].qty <= 0) state.cart.splice(i,1);
+      renderTicket();
+      refreshBadges();
+      return;
+    }
+  }
+}
+
+function refreshBadges(){
+  badgeUpdaters.forEach(fn=>fn());
 }
 
 function removeFromCart(idx){
   state.cart.splice(idx,1);
   renderTicket();
+  refreshBadges();
 }
 
 function renderTicket(){
@@ -544,8 +619,25 @@ $("#restaurantSelect").addEventListener("change", (e)=>{
     state.cart = [];
   }
   state.restaurant = val || null;
-  if (val) { renderMenu(val); } else { $("#menuArea").innerHTML = `<p style="color:var(--chalk-dim);font-size:13.5px;">Pick a restaurant above to see the menu.</p>`; $("#vendorTag").textContent=""; }
+  const imgBtn = $("#viewMenuImageBtn");
+  if (val) {
+    renderMenu(val);
+    if (MENUS[val].menuImage) { imgBtn.classList.remove("hidden"); } else { imgBtn.classList.add("hidden"); }
+  } else {
+    $("#menuArea").innerHTML = `<p style="color:var(--chalk-dim);font-size:13.5px;">Pick a restaurant above to see the menu.</p>`;
+    $("#vendorTag").textContent="";
+    imgBtn.classList.add("hidden");
+  }
   renderTicket();
+});
+$("#viewMenuImageBtn").addEventListener("click", ()=>{
+  if (!state.restaurant) return;
+  const menu = MENUS[state.restaurant];
+  if (!menu.menuImage) return;
+  $("#menuImageTitle").textContent = `${menu.name} — Full Menu`;
+  $("#menuImageEl").src = menu.menuImage;
+  $("#menuImageEl").alt = `${menu.name} menu`;
+  $("#menuImageModal").classList.remove("hidden");
 });
 $("#crewName").addEventListener("input", renderTicket);
 
@@ -635,6 +727,7 @@ async function submitOrder(){
     $("#ticketIdLine").textContent = `TICKET #${order.id.toUpperCase()}`;
     state.cart = [];
     renderTicket();
+    refreshBadges();
   }catch(e){
     console.error(e);
     toast("Couldn't reach the Google Sheet — check the URL in Settings.", false);
