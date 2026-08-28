@@ -224,7 +224,16 @@ table.log th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--
 
     <div class="step">
       <div class="step-label">Step 1 — Your name</div>
-      <input type="text" id="crewName" placeholder="e.g. Jordan P.">
+      <div class="builder-row">
+        <div>
+          <span class="field-label">First name</span>
+          <input type="text" id="crewFirst" placeholder="e.g. Jordan">
+        </div>
+        <div>
+          <span class="field-label">Last name</span>
+          <input type="text" id="crewLast" placeholder="e.g. Patel">
+        </div>
+      </div>
     </div>
 
     <div class="step">
@@ -587,7 +596,7 @@ function removeFromCart(idx){
 }
 
 function renderTicket(){
-  $("#ticketName").textContent = $("#crewName").value.trim() || "— no name —";
+  $("#ticketName").textContent = getCrewName() || "— no name —";
   $("#ticketRestaurant").textContent = state.restaurant ? `Ordering from: ${MENUS[state.restaurant].name}` : "";
   const linesEl = $("#ticketLines");
   if (state.cart.length === 0){
@@ -605,9 +614,14 @@ function renderTicket(){
   const total = state.cart.reduce((s,i)=> s + (i.price ? i.price*i.qty : 0), 0);
   $("#ticketTotal").style.display = hasPrices ? "flex" : "none";
   $("#ticketTotalVal").textContent = "$"+total.toFixed(2);
-  $("#fireBtn").disabled = !(state.restaurant && state.cart.length && $("#crewName").value.trim());
+  $("#fireBtn").disabled = !(state.restaurant && state.cart.length && $("#crewFirst").value.trim() && $("#crewLast").value.trim());
 }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function getCrewName(){
+  const first = $("#crewFirst").value.trim();
+  const last = $("#crewLast").value.trim();
+  return `${first} ${last}`.trim();
+}
 
 $("#restaurantSelect").addEventListener("change", (e)=>{
   const val = e.target.value;
@@ -639,7 +653,8 @@ $("#viewMenuImageBtn").addEventListener("click", ()=>{
   $("#menuImageEl").alt = `${menu.name} menu`;
   $("#menuImageModal").classList.remove("hidden");
 });
-$("#crewName").addEventListener("input", renderTicket);
+$("#crewFirst").addEventListener("input", renderTicket);
+$("#crewLast").addEventListener("input", renderTicket);
 
 setInterval(()=>{ $("#ticketTime").textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }, 1000);
 
@@ -690,8 +705,10 @@ async function getOrders(){
 }
 
 async function submitOrder(){
-  const name = $("#crewName").value.trim();
-  if (!name || !state.restaurant || !state.cart.length) return;
+  const first = $("#crewFirst").value.trim();
+  const last = $("#crewLast").value.trim();
+  if (!first || !last || !state.restaurant || !state.cart.length) return;
+  const name = `${first} ${last}`;
   const total = state.cart.reduce((s,i)=> s + (i.price ? i.price*i.qty : 0), 0);
   const order = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
