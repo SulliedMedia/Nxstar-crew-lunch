@@ -260,31 +260,17 @@ table.log th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--
   <div class="modal-box">
     <button class="modal-close" data-close>&times;</button>
     <h2>Settings</h2>
-    <div class="step-label" style="margin-top:4px;">Google Sheet sync (required for tracking)</div>
+    <div class="step-label" style="margin-top:4px;">Google Sheet sync</div>
     <p class="help">
-      This page is hosted on GitHub Pages, so orders need somewhere real to land — that's this Google Sheet.
-      Paste the Apps Script Web App URL below. Once it's set, "Fire order to kitchen" saves straight to
-      the sheet, and the Order Log above reads from it too.
+      The Sheet URL and passphrase are already built into this page — everyone who opens the link can
+      order without any setup. Only touch these fields if you've redeployed the Apps Script or changed
+      the passphrase and need this browser to use the new values.
     </p>
     <input type="text" id="sheetUrlInput" placeholder="https://script.google.com/macros/s/…/exec" style="margin:10px 0;">
     <div class="step-label" style="margin-top:16px;">Shared passphrase</div>
-    <p class="help">
-      Must exactly match the <code>SHARED_TOKEN</code> value set in the Apps Script. Filters out anyone
-      hitting the raw script URL directly, without going through this page.
-    </p>
     <input type="text" id="tokenInput" placeholder="e.g. nxstar-crew-25" style="margin:10px 0;">
-    <button class="add-btn" id="saveSheetUrl">Save</button>
+    <button class="add-btn" id="saveSheetUrl">Save override</button>
     <p class="help" id="sheetUrlStatus"></p>
-    <details style="margin-top:14px;" open>
-      <summary style="cursor:pointer;color:var(--chalk-dim);font-size:12.5px;">How do I set this up?</summary>
-      <p class="help">
-        1. Create a Google Sheet.<br>
-        2. Extensions → Apps Script, paste the doGet/doPost script (ask Claude for the latest version if you don't have it).<br>
-        3. Set <code>SHARED_TOKEN</code> at the top of the script to the same passphrase you enter above.<br>
-        4. Deploy → New deployment → Web app → Execute as <em>Me</em>, Access: <em>Anyone</em>.<br>
-        5. Copy the deployment URL and paste it above, on <strong>every device</strong> that needs to see the Order Log (these settings are saved per-browser, not shared).
-      </p>
-    </details>
   </div>
 </div>
 
@@ -384,7 +370,14 @@ const MENUS = {
   }
 };
 
-const state = { restaurant: null, cart: [], config: { sheetUrl: "", token: "" } };
+// Defaults baked in so the page works immediately for anyone with the link —
+// no per-device setup required. The Settings panel can still override these
+// (e.g. if you rotate the passphrase or redeploy to a new URL) on a given browser.
+const DEFAULT_CONFIG = {
+  sheetUrl: "https://script.google.com/macros/s/AKfycbz4vEfEnqR9scsieu-JrojUYK7jr8ZOCqmxrXZkjrSnWL1BZNG-4Ju1G8nrSiMZynyl/exec",
+  token: "nxstar-crew-25"
+};
+const state = { restaurant: null, cart: [], config: { ...DEFAULT_CONFIG } };
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 
@@ -565,8 +558,12 @@ setInterval(()=>{ $("#ticketTime").textContent = new Date().toLocaleTimeString([
 function loadConfig(){
   try{
     const raw = localStorage.getItem("nxstar-config");
-    if (raw) state.config = JSON.parse(raw);
-  }catch(e){ /* no config saved yet */ }
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (saved.sheetUrl) state.config.sheetUrl = saved.sheetUrl;
+      if (saved.token) state.config.token = saved.token;
+    }
+  }catch(e){ /* no local override saved */ }
   $("#sheetUrlInput").value = state.config.sheetUrl || "";
   $("#tokenInput").value = state.config.token || "";
 }
@@ -616,7 +613,7 @@ async function submitOrder(){
   };
 
   if (!state.config.sheetUrl){
-    toast("Set up Google Sheet sync in ⚙ Settings first — see instructions there.", false);
+    toast("This page isn't linked to a Sheet — contact whoever set it up.", false);
     return;
   }
 
@@ -670,7 +667,7 @@ $("#openLog").addEventListener("click", async ()=>{
 });
 async function refreshLog(){
   if (!state.config.sheetUrl){
-    $("#logTbody").innerHTML = `<tr><td colspan="5" style="color:var(--chalk-dim);">Set up Google Sheet sync in ⚙ Settings to see submitted orders here.</td></tr>`;
+    $("#logTbody").innerHTML = `<tr><td colspan="5" style="color:var(--chalk-dim);">This page isn't linked to a Sheet — contact whoever set it up.</td></tr>`;
     $("#logSummary").textContent = "";
     return;
   }
